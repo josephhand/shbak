@@ -6,7 +6,39 @@ if ! which "b3sum" &> /dev/null; then
     exit 1
 fi
 
+VERSION='shbak 1.0.0'
+HELP='
+Usage:
+shbak <targetdir>
+shbak --help
+shbak --version
+
+Simple POSIX backup utility.
+
+Options:
+--help     display this help
+--version  display version
+
+For more details see https://github.com/josephhand/shbak
+'
+
 # Read Arguments
+
+TEMP=$(getopt -o hv --long help,version -n shbak -- "$@")
+eval set -- "$TEMP"
+
+while true; do
+    case "$1" in
+        --help )
+            echo "$HELP"
+            exit 0
+        ;;
+        --version )
+            echo "$VERSION"
+            exit 0
+        ;;
+    esac
+done
 
 TARGET_DIR=$1
 
