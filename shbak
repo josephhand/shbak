@@ -1,0 +1,96 @@
+#!/bin/sh
+
+# Check for dependencies
+if ! which "b3sum" &> /dev/null; then
+    echo "b3sum is required. Is it installed?"
+    exit 1
+fi
+
+# Read Arguments
+
+TARGET_DIR=$1
+
+if [[ "$TARGET_DIR" = "" ]]; then
+    echo "Must specify a target directory."
+    exit 1
+fi
+
+# Verify Backup Integrity
+
+verification_failed() {
+    echo "WARNING: Backup integrity verification failed. The backups were"
+    echo "most likely modified or corrupted."
+    echo
+    echo "If you frequently get this error despite reseting the backup, you"
+    echo "should use a different, more reliable medium for your backups."
+    echo
+    echo "If you select continue, shbak will clear this backup directory and"
+    echo "create a new level 0 archive."
+    echo
+    read -p "Continue? (y/N) " YN
+
+    if [[ ! $YN =~ ^[Yy]$ ]]; then
+        echo "Backup Aborted."
+        exit 1
+    fi
+
+    rm "$TARGET_DIR"/*.tar.gz
+    rm "$TARGET_DIR/.snar"
+    rm "$TARGET_DIR/.sums"
+}
+
+echo "Verifying backup integrity..."
+
+if [[ -f "$TARGET_DIR/.sums" ]]; then
+
+    (cd $TARGET_DIR; b3sum --check .sums)
+
+    if [[ $? = 0 ]]; then
+        echo "Backup Verification Successful"
+    else
+        verification_failed
+    fi
+else
+
+    BACKUP_COUNT=$(find $TARGET_DIR | grep -c ".tar.gz")
+
+    if [[ $BACKUP_COUNT = 0 ]]; then
+        echo "No Backups To Verify"
+    else
+        verification_failed
+    fi
+fi
+
+
+# Create New Incremental Backup
+
+ARCHIVE_NAME=$(date +%Y-%m-%d_%H%M%S).tar.gz
+
+echo "Creating backup..."
+echo "The following files/directories will be archived: "
+
+cat "$TARGET_DIR/.targets" |\
+    grep -v "^#"
+
+read -p "Continue? " YN
+
+if [[ ! $YN =~ ^[Yy]$ ]]; then
+    exit 1
+fi
+
+echo "Performing backup..."
+
+cat "$TARGET_DIR/.targets" |\
+    grep -v "^#" |\
+    xargs tar -hczvf "$TARGET_DIR/$ARCHIVE_NAME" -g "$TARGET_DIR/.snar"
+
+echo "Computing backup checksum..."
+
+(cd $TARGET_DIR; b3sum $ARCHIVE_NAME >> .sums)
+
+echo
+echo "Backup Successful!"
+echo "Backup:      $ARCHIVE_NAME"
+echo "Backup size: $(stat --format=%s "$TARGET_DIR/$ARCHIVE_NAME")"
+echo
+echo "If you are using a usb drive for backups, it is recommended to sync the file system now."
